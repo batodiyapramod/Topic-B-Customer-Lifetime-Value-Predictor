@@ -16,54 +16,22 @@ class SynapCoresClient
     {
         $this->baseUrl = rtrim(config('services.synapcores.base_url', env('SYNAPCORES_BASE_URL')), '/');
         $this->apiKey = config('services.synapcores.api_key', env('SYNAPCORES_API_KEY'));
-        $this->timeout = (int) config('services.synapcores.timeout', env('SYNAPCORES_TIMEOUT', 30));
+       $this->timeout = (float) config('services.synapcores.timeout', 60.0);
     }
+    // app/Services/SynapCores/SynapCoresClient.php
 
-    public function query(string $sql, array $bindings = []): array
+    public static function query(string $sql, array $bindings = [])
     {
-        // try {
-        //         $response = Http::withHeaders([
-        //             'Authorization' => "Bearer {$this->apiKey}",
-        //             'Accept' => 'application/json',
-        //         ])
-        //         ->timeout($this->timeout)
-        //         ->post("{$this->baseUrl}/v1/query", [
-        //             'sql' => $sql,
-        //             'bindings' => $bindings
-        //         ]);
+        $instance = app(self::class);
 
-        //         if ($response->failed()) {
-        //             Log::error('SynapCores Query Engine Failure', [
-        //                 'status' => $response->status(),
-        //                 'error' => $response->body(),
-        //                 'query' => $sql
-        //             ]);
-        //             throw new Exception("SynapCores Error: " . $response->json('error.message', 'Unknown Query Exception'));
-        //         }
-
-        //         return $response->json('data', []);
-        //     } catch (Exception $e) {
-        //         Log::critical('SynapCores Transport Exception: ' . $e->getMessage());
-        //         throw $e;
-        //     }
-        // }
-
-        //Community Edition "API endpoint not found so this code comment
-
-        try {
-            // Route execution explicitly through the secondary connection block
-            $results = DB::connection('synapcores')->select($sql, $bindings);
-
-            // Convert array of stdClass objects to associative arrays for compatibility
-            return json_decode(json_encode($results), true);
-        } catch (Exception $e) {
-            Log::critical('SynapCores Database Execution Failure', [
-                'sql' => $sql,
-                'bindings' => $bindings,
-                'error' => $e->getMessage()
-            ]);
-
-            throw new Exception("SynapCores Connection Error: " . $e->getMessage());
-        }
+        return Http::withHeaders([
+            'Authorization' => "Bearer " . $instance->apiKey,
+            'Content-Type' => 'application/json',
+        ])
+        ->timeout(300)
+        ->post("{$instance->baseUrl}/v1/query/execute", [
+            'sql' => $sql,
+            'params' => $bindings
+        ]);
     }
 }

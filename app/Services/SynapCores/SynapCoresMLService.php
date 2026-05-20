@@ -1,5 +1,6 @@
 <?php
 namespace App\Services\SynapCores;
+use Log;
 
 class SynapCoresMLService
 {
@@ -9,21 +10,29 @@ class SynapCoresMLService
     {
         $this->client = $client;
     }
-
-    public function initializeAndTrainModel(): array
+    public function initializeAndTrainModel(): void
     {
-        $this->client->query("
+        // 1. Create a tiny dummy table so the experiment definition validation is instant
+        SynapCoresClient::query("DROP TABLE IF EXISTS training_sample;");
+        SynapCoresClient::query("CREATE TABLE training_sample AS SELECT * FROM customers LIMIT 10;");
+
+        // 2. Define the experiment pointing to the tiny sample table
+        SynapCoresClient::query("
             CREATE EXPERIMENT IF NOT EXISTS ltv_v1
             WITH (
                 target = 'ltv_12mo',
                 model_type = 'regression',
                 features = ['acquisition_channel', 'first_order_amount', 'total_orders_count', 'days_since_last_order']
             )
+            AS SELECT * FROM training_sample;
         ");
 
-        return $this->client->query("TRAIN ltv_v1");
-    }
+        // 3. Now run the TRAIN command.
+        // This part runs in the background and won't time out the HTTP request.
+        SynapCoresClient::query("TRAIN ltv_v1;");
 
+        SynapCoresClient::query("DROP TABLE training_sample;");
+    }
     public function scoreAdHocVector(string $channel, float $firstAmount, int $totalCount, int $daysSince): float
     {
         $sql = "SELECT AUTOML.PREDICT('ltv_v1', JSON_OBJECT(
